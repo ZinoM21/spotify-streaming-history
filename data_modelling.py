@@ -1,6 +1,6 @@
 import pandas as pd
 
-def model_data(df: pd.DataFrame,  exclude_devices: list[str] = [], df_audio_features: pd.DataFrame | None = None,) -> pd.DataFrame:
+def model_data(df: pd.DataFrame,  exclude_devices: list[str] | None = None, df_audio_features: pd.DataFrame | None = None,) -> pd.DataFrame:
     """
     Merge, clean, and process streaming data DataFrames.
     Args:
@@ -28,7 +28,6 @@ def model_data(df: pd.DataFrame,  exclude_devices: list[str] = [], df_audio_feat
     print("Renaming columns ...")
     df_renamed = df_sorted.rename(columns={
         'ms_played': 'listening_time_in_ms',
-        'duration_ms': 'api_song_lenght_in_ms',
         'conn_country':'country',
         'ip_addr_decrypted': 'ip_address',
         'master_metadata_track_name': 'track',
@@ -40,19 +39,22 @@ def model_data(df: pd.DataFrame,  exclude_devices: list[str] = [], df_audio_feat
         'spotify_episode_uri': 'podcast_uri'
         })
     print("Dropping irrelevant columns ...")
-    # df_renamed_relevant = df_renamed.drop(columns=['user_agent_decrypted', 'incognito_mode', 'offline_timestamp', 'ts', 'time_signature', 'track_href', 'analysis_url', 'acusticness'])
-    df_renamed_relevant = df_renamed.drop(columns=['incognito_mode', 'offline_timestamp', 'ts', 'time_signature', 'track_href', 'analysis_url', 'acusticness'])
+    columns_to_drop = ['offline_timestamp', 'ts']
+    optional_columns_to_drop = ['time_signature', 'track_href', 'analysis_url', 'acousticness']
+    columns_to_drop.extend([col for col in optional_columns_to_drop if col in df_renamed.columns])
+    df_renamed_relevant = df_renamed.drop(columns=columns_to_drop)
 
     print("Renaming existing columns & adding new ones ...")
     df_renamed_relevant['listening_time_in_s'] = df_renamed_relevant['listening_time_in_ms'] / 1000
     df_renamed_relevant['listening_time_in_min'] = df_renamed_relevant['listening_time_in_s'] / 60
     df_renamed_relevant['listening_time_in_h'] = df_renamed_relevant['listening_time_in_min'] / 60
-    df_renamed_relevant['song_lenght_in_s'] = df_renamed_relevant['api_song_lenght_in_ms'] / 1000
-    df_renamed_relevant['song_lenght_in_min'] = df_renamed_relevant['song_lenght_in_s'] / 60
-    df_renamed_relevant['song_lenght_in_h'] = df_renamed_relevant['song_lenght_in_min'] / 60
-    df_renamed_relevant['relation_listening_lenght'] = df_renamed_relevant["listening_time_in_ms"].div(df_renamed_relevant["api_song_lenght_in_ms"].values)
+    if df_audio_features is not None and 'duration_ms' in df_renamed_relevant.columns:
+        df_renamed_relevant['song_lenght_in_s'] = df_renamed_relevant['duration_ms'] / 1000
+        df_renamed_relevant['song_lenght_in_min'] = df_renamed_relevant['song_lenght_in_s'] / 60
+        df_renamed_relevant['song_lenght_in_h'] = df_renamed_relevant['song_lenght_in_min'] / 60
+        df_renamed_relevant['relation_listening_lenght'] = df_renamed_relevant["listening_time_in_ms"].div(df_renamed_relevant["duration_ms"].values)
+        df_renamed_relevant.loc[df_renamed_relevant['relation_listening_lenght'] > 1, 'relation_listening_lenght'] = 1
     df_renamed_relevant = df_renamed_relevant[df_renamed_relevant['listening_time_in_ms'] > 0]
-    df_renamed_relevant.loc[df_renamed_relevant['relation_listening_lenght'] > 1, 'relation_listening_lenght'] = 1
     print("Clearing data set from unwanted tracks ...")
     df_renamed_relevant_cleared = df_renamed_relevant.loc[df_renamed_relevant['track'] != 'Solace Album Mix']
     print("Replacing special characters ...")
@@ -108,7 +110,7 @@ def model_data(df: pd.DataFrame,  exclude_devices: list[str] = [], df_audio_feat
     df_renamed_devices['platform'] = df_renamed_devices.platform.str.replace(r'(^.*Partner android_tv Sony;BRAVIA4KGB.*$)', 'Sony Smart TV', regex=True)
 
 
-    if exclude_devices:
+    if exclude_devices is not None:
         print(f"Excluding devices: {exclude_devices}")
         df_cleared = df_renamed_devices[~df_renamed_devices['platform'].isin(exclude_devices)]
     else:

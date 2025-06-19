@@ -29,8 +29,8 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
 
 MODELED_DATA_PATH = './out/modeled_data.parquet'
-AUDIO_FEATURES_PATH = 'data/audio_features.csv'
-EXCLUDE_DEVICES = ['iPhone 5', 'iPhone 7', 'iPhone XS', 'Samsung Galaxy A5', 'Android Tablet', 'Sony Smart TV']
+EXCLUDE_DEVICES = None # e.g. ['iPhone 5', 'iPhone 7', 'iPhone XS', 'Samsung Galaxy A5', 'Android Tablet', 'Sony Smart TV']
+AUDIO_FEATURES_PATH = None
 
 parser = argparse.ArgumentParser(description='Spotify Streaming History Analysis')
 parser.add_argument('--skip-import', action='store_true', help=f'Skip data import and modeling, load modeled data from parquet file in {MODELED_DATA_PATH}')
@@ -44,9 +44,7 @@ if args.skip_import:
     modeled_data = pd.read_parquet(MODELED_DATA_PATH)
 else:
     df = load_streaming_data()
-    # This can be enabled if there are audio features available under the AUDIO_FEATURES_PATH
-    # df_audio_features = pd.read_csv(AUDIO_FEATURES_PATH, sep=',', index_col='uri')
-    df_audio_features = None
+    df_audio_features = pd.read_csv(AUDIO_FEATURES_PATH, sep=',', index_col='uri') if AUDIO_FEATURES_PATH is not None else None
     modeled_data = model_data(df, EXCLUDE_DEVICES, df_audio_features)
     modeled_data.to_parquet(MODELED_DATA_PATH)
     print(f"Modeled data saved to {MODELED_DATA_PATH}")
@@ -69,16 +67,20 @@ lineplotter.lineplot_count_log('artist')
 lineplotter.lineplot_count_log('album')
 lineplotter.lineplot_timeseries_plotly()
 lineplotter.lineplot_timeseries_week()
-lineplotter.lineplot_timeseries_audio_features_mean_month()
-lineplotter.lineplot_timeseries_audio_features_mean_week()
-lineplotter.lineplot_timeseries_bpm_month()
-lineplotter.lineplot_timeseries_bpm_week()
+if AUDIO_FEATURES_PATH is not None:
+    '''Tempo and other audio featurs are only available if you have access to audio featurs for all your streamed tracks. See README.md for more information.'''
+    lineplotter.lineplot_timeseries_audio_features_mean_month()
+    lineplotter.lineplot_timeseries_audio_features_mean_week()
+    lineplotter.lineplot_timeseries_bpm_month()
+    lineplotter.lineplot_timeseries_bpm_week()
 
 # Box plots
 boxplotter = BoxPlotter(modeled_data, plt, sns)
 print("Creating box plots...")
-boxplotter.boxplot_listen_time_start()
-boxplotter.boxplot_listen_time_end()
+if AUDIO_FEATURES_PATH is not None:
+    '''Total song length is only available if you have access to audio featurs for all your streamed tracks. See README.md for more information.'''
+    boxplotter.boxplot_listen_time_start()
+    boxplotter.boxplot_listen_time_end()
 
 # Heatmaps
 heatmap_plotter = HeatmapPlotter(modeled_data, plt, sns, pd, calplot)
